@@ -45,7 +45,7 @@
   header {
     background: var(--surface);
     border-bottom: 1px solid var(--border);
-    padding: 10px 16px 0;
+    padding: 14px 16px 0;
     position: sticky;
     top: 0;
     z-index: 100;
@@ -55,7 +55,7 @@
     display: flex;
     align-items: center;
     gap: 12px;
-    margin-bottom: 10px;
+    margin-bottom: 14px;
   }
 
   .logo {
@@ -882,75 +882,6 @@ const REGIONS = {
         ]
       },
     ]
-  },
-
-  "Los Angeles": {
-    rinks: [
-      {
-        name: "Anaheim ICE",
-        location: "Anaheim, CA",
-        address: "300 W Lincoln Ave, Anaheim, CA 92805",
-        url: "https://www.therinksanaheim.com",
-        schedule: [
-          { type:"public",    label:"Public Skating",  start:"12:00", end:"14:00", days:[0,1,2,3,4,5,6] },
-          { type:"public",    label:"Public Skating",  start:"19:00", end:"21:00", days:[5,6] },
-          { type:"stick",     label:"Stick & Puck",    start:"06:30", end:"08:00", days:[1,2,3,4,5] },
-          { type:"pickup",    label:"Pickup Hockey",   start:"21:15", end:"22:45", days:[1,3,5] },
-          { type:"freestyle", label:"Freestyle",       start:"09:00", end:"10:30", days:[0,2,4,6] },
-        ]
-      },
-      {
-        name: "Great Park Ice",
-        location: "Irvine, CA",
-        address: "888 Ridge Valley, Irvine, CA 92618",
-        url: "https://www.greatparkice.com",
-        schedule: [
-          { type:"public",    label:"Public Skating",  start:"11:30", end:"13:30", days:[0,1,2,3,4,5,6] },
-          { type:"public",    label:"Public Skating",  start:"19:30", end:"21:30", days:[4,5,6] },
-          { type:"stick",     label:"Stick & Puck",    start:"06:00", end:"07:30", days:[0,2,4,6] },
-          { type:"pickup",    label:"Pickup Hockey",   start:"20:30", end:"22:00", days:[0,2,4] },
-          { type:"freestyle", label:"Freestyle",       start:"14:00", end:"15:30", days:[1,3,5] },
-        ]
-      },
-      {
-        name: "Lakewood ICE",
-        location: "Lakewood, CA",
-        address: "3975 Pixie Ave, Lakewood, CA 90712",
-        url: "https://www.lakewoodice.com",
-        schedule: [
-          { type:"public",    label:"Public Skating",  start:"13:00", end:"15:00", days:[0,1,2,3,4,5,6] },
-          { type:"public",    label:"Public Skating",  start:"19:00", end:"21:00", days:[5,6] },
-          { type:"stick",     label:"Stick & Puck",    start:"07:00", end:"08:30", days:[1,3,5] },
-          { type:"pickup",    label:"Pickup Hockey",   start:"20:30", end:"22:00", days:[0,3,6] },
-          { type:"freestyle", label:"Freestyle",       start:"10:00", end:"11:30", days:[1,3,5,6] },
-        ]
-      },
-      {
-        name: "Yorba Linda ICE",
-        location: "Yorba Linda, CA",
-        address: "4975 Casa Loma Ave, Yorba Linda, CA 92886",
-        url: "https://www.yorbalindaice.com",
-        schedule: [
-          { type:"public",    label:"Public Skating",  start:"12:00", end:"14:00", days:[0,1,2,3,4,5,6] },
-          { type:"public",    label:"Public Skating",  start:"19:30", end:"21:30", days:[5,6] },
-          { type:"stick",     label:"Stick & Puck",    start:"06:30", end:"08:00", days:[0,2,4] },
-          { type:"pickup",    label:"Pickup Hockey",   start:"21:00", end:"22:30", days:[1,4,6] },
-          { type:"freestyle", label:"Freestyle",       start:"09:30", end:"11:00", days:[0,2,4,6] },
-        ]
-      },
-      {
-        name: "KHS Ice",
-        location: "Corona, CA",
-        address: "150 S Lincoln Ave, Corona, CA 92882",
-        url: "https://www.therinksana.com",
-        schedule: [
-          { type:"public",    label:"Public Skating",  start:"13:00", end:"15:00", days:[0,1,2,3,4,5,6] },
-          { type:"stick",     label:"Stick & Puck",    start:"07:00", end:"08:30", days:[1,3,5] },
-          { type:"pickup",    label:"Pickup Hockey",   start:"20:30", end:"22:00", days:[0,2,6] },
-          { type:"freestyle", label:"Freestyle",       start:"10:00", end:"11:30", days:[2,4,6] },
-        ]
-      },
-    ]
   }
 };
 </script>
@@ -959,7 +890,7 @@ const REGIONS = {
 <header>
   <div class="header-top">
     <a class="logo-img-link" href="#">
-      <img src="final_logo_v2_no_back.png" alt="IceTimeHQ" class="logo-img" />
+      <img src="logo.png" alt="IceTimeHQ" class="logo-img" />
     </a>
     <nav class="header-nav">
       <a href="#">About</a>
@@ -979,8 +910,8 @@ const REGIONS = {
 </div>
 
 <div class="view-bar">
-  <button class="view-pill active" id="pillRink">By Rink</button>
-  <button class="view-pill" id="pillTime">By Time</button>
+  <button class="view-pill active" id="pillRink" onclick="setView('rink')">By Rink</button>
+  <button class="view-pill" id="pillTime" onclick="setView('time')">By Time</button>
 </div>
 
 <div class="legend-bar" id="legendBar"></div>
@@ -1045,6 +976,14 @@ function addDays(d, n) {
 function fmt12(t) {
   const [h, m] = t.split(":").map(Number);
   return `${h % 12 || 12}:${String(m).padStart(2,"0")} ${h < 12 ? "AM" : "PM"}`;
+}
+
+// Returns "today" or "on Wednesday March 27" depending on selected date
+function emptyDayLabel() {
+  const today = new Date();
+  const sel = addDays(baseDate, offset);
+  if (sel.toDateString() === today.toDateString()) return "today";
+  return `on ${DOW[sel.getDay()]} ${MONTHS[sel.getMonth()]} ${sel.getDate()}`;
 }
 const DOW = ["Sun","Mon","Tue","Wed","Thu","Fri","Sat"];
 
@@ -1195,7 +1134,7 @@ function populateCardBody(card, sessions, rink, dow, isLive) {
     const msg = document.createElement("div");
     msg.className = "no-sessions";
     msg.textContent = isLive
-      ? "No public sessions today"
+      ? `No sessions found ${emptyDayLabel()}`
       : "No sessions match active filters";
     card.appendChild(msg);
     return false; // no sessions
@@ -1279,7 +1218,7 @@ function renderByRink(main, rinks) {
         const rawCount = rink.schedule.filter(s => s.days.includes(dow)).length;
         const msg = document.createElement("div");
         msg.className = "no-sessions";
-        msg.textContent = rawCount === 0 ? "No sessions today" : "No sessions match active filters";
+        msg.textContent = rawCount === 0 ? `No sessions found ${emptyDayLabel()}` : "No sessions match active filters";
         card.appendChild(msg);
         emptyCards.push(card);
       } else {
@@ -1300,7 +1239,7 @@ function renderByRink(main, rinks) {
   attachEmptyToggle(main, emptyCards);
 
   if (visibleCount === 0 && emptyCards.length === 0) {
-    main.innerHTML = `<div class="no-results">No sessions found for this day.</div>`;
+    main.innerHTML = `<div class="no-results">No sessions found ${emptyDayLabel()}.</div>`;
   }
 }
 
@@ -1383,7 +1322,7 @@ function renderByTime(main, rinks) {
     filtered.sort((a, b) => a.s.start.localeCompare(b.s.start));
 
     if (filtered.length === 0) {
-      list.innerHTML = `<div class="no-sessions">No sessions match your filters today.</div>`;
+      list.innerHTML = `<div class="no-sessions">No sessions match your filters ${emptyDayLabel()}.</div>`;
     } else {
       filtered.forEach(({ s, rink }) => list.appendChild(makeSessionRow(s, rink, true)));
     }
@@ -1420,8 +1359,6 @@ function renderByTime(main, rinks) {
 }
 
 // ─── INIT ────────────────────────────────────────────
-document.getElementById('pillRink').onclick = () => setView('rink');
-document.getElementById('pillTime').onclick = () => setView('time');
 renderRegionTabs();
 renderDateStrip();
 renderLegend();
