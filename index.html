@@ -1215,3 +1215,17 @@ function renderByTime(main, rinks, dow) {
   const list = document.createElement("div");
   list.className = "sessions-list";
   all.forEach(({ s, rink }) => list.appendChild(makeSessionRow(s, rink, true)));
+  card.appendChild(list);
+  main.appendChild(card);
+}
+
+// ─── INIT ────────────────────────────────────────────
+document.getElementById('pillRink').onclick = () => setView('rink');
+document.getElementById('pillTime').onclick = () => setView('time');
+renderRegionTabs();
+renderDateStrip();
+renderLegend();
+renderContent();
+</script>
+</body>
+</html>
