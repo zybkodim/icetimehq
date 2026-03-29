@@ -1,5 +1,5 @@
 // /api/schedule.js — IceTimeHQ DaySmart Proxy
-// v5 — noise filtering, name cleanup, deduplication
+// v6 — facility bleed fix (post-filter by surface name), registration URL fix for The Rinks
 // CommonJS (module.exports) — required for Vercel without "type":"module"
 
 const DAYSMART_BASE = 'https://apps.daysmartrecreation.com/dash/jsonapi/api/v1/events';
@@ -21,47 +21,36 @@ function cacheSet(key, data) { cache.set(key, { data, ts: Date.now() }); }
 // 2. Strip facility prefix codes: "PI – Stick Time" → "Stick Time"
 function cleanName(raw) {
   let n = (raw || '').trim();
-  n = n.replace(/\s*\(\d{1,2}\/\d{1,2}[-–]\d{1,2}\/\d{1,2}\)\s*$/, '').trim();  // strip (3/23-3/29)
-  n = n.replace(/^[A-Z]{2,5}\s*[-–]\s*/, '').trim();                               // strip "PI – " / "KHS – "
+  n = n.replace(/\s*\(\d{1,2}\/\d{1,2}[-–]\d{1,2}\/\d{1,2}\)\s*$/, '').trim();
+  n = n.replace(/^[A-Z]{2,5}\s*[-–]\s*/, '').trim();
   return n;
 }
 
 // ─── CLASSIFY by cleaned session name ────────────────────────────────────────
 function classifySession(name) {
   const n = name.toLowerCase();
-  if (/freestyle|freeskate|free skate|figure|fs session|patch/.test(n))                             return 'freestyle';
-  if (/pick[\s-]?up|drop[\s-]in|adult hock|open hock/.test(n))                                      return 'pickup';
-  if (/stick|shoot|puck|stick time|sticktime/.test(n))                                              return 'stick';
+  if (/freestyle|freeskate|free skate|figure|fs session|patch/.test(n))                              return 'freestyle';
+  if (/pick[\s-]?up|drop[\s-]in|adult hock|open hock/.test(n))                                       return 'pickup';
+  if (/stick|shoot|puck|stick time|sticktime/.test(n))                                               return 'stick';
   if (/public|open skat|general skat|family skat|adult skat|playground on ice|recreational/.test(n)) return 'public';
   return 'other';
 }
 
 // ─── EXCLUSION LIST ───────────────────────────────────────────────────────────
-// All keyword checks run on the CLEANED name (lowercase).
 const EXCLUDE_KEYWORDS = [
-  // Lesson programs
   'learn to skate', 'lts', 'learn-to-skate',
-  // Games / league
   ' vs ', 'league game', 'tournament',
-  // Team practices / shinny
   'duck shin', 'shinny',
-  // Goalie-only
   'goalie',
-  // Programs / camps
   'camp', 'clinic',
-  // Private / internal
   'private', 'rental', 'staff', 'maintenance', 'resurfac', 'admin', 'test event',
-  // Coaching
   'coach', 'private lesson', 'inside edge', 'strength and cond',
 ];
 
 function shouldExclude(cleanedName, resourceId) {
-  // Ashburn private coach resource
   if (resourceId === 21) return true;
-
   const n = cleanedName.toLowerCase();
   if (EXCLUDE_KEYWORDS.some(kw => n.includes(kw))) return true;
-
   return false;
 }
 
@@ -71,10 +60,15 @@ function parseTime(iso) {
   return m ? m[1] : null;
 }
 
+// ─── REGISTRATION URL ─────────────────────────────────────────────────────────
+// The Rinks (company=rinks) uses a calendar URL with location= parameter.
+// All other companies use the standard event-registration URL.
 function buildRegUrl(company, date, facilityId) {
-  let url = `https://apps.daysmartrecreation.com/dash/x/#/online/${company}/event-registration?date=${date}`;
-  if (facilityId) url += `&facility_ids=${facilityId}`;
-  return url;
+  if (company === 'rinks' && facilityId) {
+    return `https://apps.daysmartrecreation.com/dash/x/#/online/rinks/calendar`
+      + `?start=${date}&end=${date}&location=${facilityId}`;
+  }
+  return `https://apps.daysmartrecreation.com/dash/x/#/online/${company}/event-registration?date=${date}`;
 }
 
 function nextDateStr(date) {
@@ -104,7 +98,9 @@ function buildUrl(company, date, endDate, facilityId, includeStr) {
 }
 
 // ─── NORMALIZE ───────────────────────────────────────────────────────────────
-function normalize(json, company, date, facilityId) {
+// facilityFilter: optional lowercase substring to match against surface name.
+// Used to prevent multi-facility bleed when company=rinks serves multiple venues.
+function normalize(json, company, date, facilityId, facilityFilter) {
   const events   = json.data     || [];
   const included = json.included || [];
 
@@ -112,6 +108,7 @@ function normalize(json, company, date, facilityId) {
   for (const item of included) idx[`${item.type}::${item.id}`] = item;
 
   const sessions = [];
+  let filteredByFacility = 0;
 
   for (const ev of events) {
     const attrs = ev.attributes || {};
@@ -146,6 +143,17 @@ function normalize(json, company, date, facilityId) {
       if (res) surface = res.attributes?.name || null;
     }
 
+    // ── Facility filter: reject sessions from other venues ────────────────
+    // DaySmart's facility_id param is a hint, not a strict filter.
+    // We post-filter by checking the surface/resource name contains the
+    // expected facility keyword (e.g. "poway", "khs").
+    if (facilityFilter && surface) {
+      if (!surface.toLowerCase().includes(facilityFilter.toLowerCase())) {
+        filteredByFacility++;
+        continue;
+      }
+    }
+
     // ── Price ─────────────────────────────────────────────────────────────
     let price = null;
     const prodRel = rels['homeTeam.product']?.data || rels.product?.data;
@@ -174,7 +182,7 @@ function normalize(json, company, date, facilityId) {
   // Sort by start time
   sessions.sort((a, b) => a.start.localeCompare(b.start));
 
-  // ── Deduplicate same-time/surface/type (Part 3 Fix 3) ────────────────────
+  // ── Deduplicate same-time/surface/type ───────────────────────────────────
   const seen = new Set();
   const deduped = sessions.filter(s => {
     const key = `${s.start}::${s.end}::${s.surface || ''}::${s.type}`;
@@ -183,7 +191,7 @@ function normalize(json, company, date, facilityId) {
     return true;
   });
 
-  console.log(`[schedule] ${company} ${date}: raw=${events.length} kept=${deduped.length}`);
+  console.log(`[schedule] ${company}${facilityFilter ? `(${facilityFilter})` : ''} ${date}: raw=${events.length} facilityFiltered=${filteredByFacility} kept=${deduped.length}`);
   return deduped;
 }
 
@@ -240,7 +248,7 @@ module.exports = async function handler(req, res) {
   res.setHeader('Access-Control-Allow-Methods', 'GET, OPTIONS');
   if (req.method === 'OPTIONS') { res.status(200).end(); return; }
 
-  const { company, date, facility_id, debug } = req.query;
+  const { company, date, facility_id, facility_filter, debug } = req.query;
 
   if (!company || !date) {
     return res.status(400).json({ error: 'Missing: company, date', sessions: [] });
@@ -249,7 +257,8 @@ module.exports = async function handler(req, res) {
     return res.status(400).json({ error: 'Date must be YYYY-MM-DD', sessions: [] });
   }
 
-  const cacheKey = `${company}::${date}::${facility_id || ''}`;
+  // Include facility_filter in cache key so Poway and KHS cache separately
+  const cacheKey = `${company}::${date}::${facility_id || ''}::${facility_filter || ''}`;
 
   if (!debug) {
     const hit = cacheGet(cacheKey);
@@ -272,11 +281,17 @@ module.exports = async function handler(req, res) {
 
   // Debug mode — inspect raw DaySmart response
   if (debug === '1') {
+    const allSurfaces = (json.included || [])
+      .filter(i => i.type === 'resources')
+      .map(i => i.attributes?.name || '(empty)');
+
     return res.status(200).json({
       _debug: true,
+      facilityFilter:      facility_filter || null,
       includeStrategyUsed: includeStr,
       rawEventCount:       (json.data || []).length,
       allIncludedTypes:    [...new Set((json.included || []).map(i => i.type))],
+      allSurfaces,
       sampleSummaryNames:  (json.included || [])
         .filter(i => i.type === 'event-summaries')
         .slice(0, 20)
@@ -289,7 +304,7 @@ module.exports = async function handler(req, res) {
     });
   }
 
-  const sessions = normalize(json, company, date, facility_id || null);
+  const sessions = normalize(json, company, date, facility_id || null, facility_filter || null);
   cacheSet(cacheKey, sessions);
   res.setHeader('X-Cache', 'MISS');
   return res.status(200).json({ sessions, source: 'live' });
