@@ -1905,4 +1905,16 @@ function renderSearchResults(results, q) {
   });
 }
 
-// ─── INIT ───────────────�
+// ─── INIT ────────────────────
+const _savedRegion = localStorage.getItem('selectedRegion');
+if (_savedRegion && REGIONS[_savedRegion]) selectedRegion = _savedRegion;
+else selectedRegion = Object.keys(REGIONS)[0];
+
+renderRegionTabs();
+renderDateStrip();
+renderLegend();
+renderContent();
+initSearch();
+</script>
+</body>
+</html>
