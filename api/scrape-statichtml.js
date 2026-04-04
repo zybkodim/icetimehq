@@ -27,15 +27,23 @@ function classifyType(name = '') {
 
 const EXCLUDE = /game|learn.to.skat|lts|duck shinny|goalie.only|private|tournament|birthday|party|lesson|class|clinic|camp/i;
 
-// ── Config ────────────────────────────────────────────────────────────────────
-const RINKS = {
+// ── Config — metadata from rinks.json, schedule data inline ──────────────────
+const fs   = require('fs');
+const path = require('path');
+const _allRinks = JSON.parse(fs.readFileSync(path.join(__dirname, 'rinks.json'), 'utf8'));
+const _shMeta   = Object.fromEntries(
+  Object.values(_allRinks)
+    .filter(r => r.scraper_file === 'api/scrape-statichtml.js' && r.scraper_key)
+    .map(r => [r.scraper_key, r])
+);
+
+// Schedule data stays here — rinks.json only stores metadata
+const RINK_SCHEDULES = {
 
   // ── STRATEGY A: Fixed weekly ──────────────────────────────────────────────
 
   smithfield: {
-    name:     'Smithfield Municipal Ice Rink',
     strategy: 'fixed-weekly',
-    website:  'https://www.smithfieldri.gov/departments/ice-rink',
     surface:  'Ice',
     timezone: 'America/New_York',
     price:    5.00,
@@ -51,9 +59,7 @@ const RINKS = {
   },
 
   burbank: {
-    name:     'Burbank Ice Arena',
     strategy: 'fixed-weekly',
-    website:  'https://www.burbankicearena.com/public-skating',
     surface:  'Ice',
     timezone: 'America/New_York',
     price:    8.00,
@@ -69,9 +75,7 @@ const RINKS = {
   },
 
   norfolk: {
-    name:     'Norfolk Ice Arena',
     strategy: 'fixed-weekly',
-    website:  'https://norfolkarena.com/index.php/publicskating/',
     surface:  'Ice',
     timezone: 'America/New_York',
     price:    null,
@@ -82,30 +86,11 @@ const RINKS = {
     },
   },
 
-  // ── STRATEGY B: CivicPlus HTML ────────────────────────────────────────────
-
-  stoneham: {
-    name:        'Stoneham Arena',
-    strategy:    'civicplus',
-    calendarUrl: 'https://www.stoneham-ma.gov/calendar.aspx',
-    calendarCid: '26',
-    website:     'https://www.stoneham-ma.gov/164/Stoneham-Arena',
-    surface:     'Ice',
-    timezone:    'America/New_York',
-    price:       10.00,
-    sessionTypes: ['Public Skating', 'Public Stick', 'Adult Stick'],
-  },
-
   bennymagiera: {
-    name:     'Benny Magiera Rink',
     strategy: 'fixed-weekly',
-    website:  'https://www.westwarwickri.org/index.asp?SEC=706EFDDE-B8A8-457B-8035-C96BC10019E1',
     surface:  'Ice',
     timezone: 'America/New_York',
     price:    10.00,
-    // Source: westwarwickri.gov schedule flyer (Mar 2026)
-    // Stick & Puck: Tue/Thu/Fri 1:30–4:30pm. Schedule posted monthly as flyers.
-    // Public skate times not confirmed — update when posted.
     schedule: {
       0: [],
       1: [],
@@ -117,13 +102,23 @@ const RINKS = {
     },
   },
 
+  // ── STRATEGY B: CivicPlus HTML ────────────────────────────────────────────
+
+  stoneham: {
+    strategy:    'civicplus',
+    calendarUrl: 'https://www.stoneham-ma.gov/calendar.aspx',
+    calendarCid: '26',
+    surface:     'Ice',
+    timezone:    'America/New_York',
+    price:       10.00,
+    sessionTypes: ['Public Skating', 'Public Stick', 'Adult Stick'],
+  },
+
   loring: {
-    name:            'Loring Arena',
     strategy:        'civicplus',
     calendarUrl:     'https://www.framinghamma.gov/calendar.aspx',
     calendarCid:     null,
     calendarKeyword: 'skate',
-    website:         'https://www.framinghamma.gov/678/Loring-Arena',
     surface:         'Ice',
     timezone:        'America/New_York',
     price:           null,
@@ -133,10 +128,8 @@ const RINKS = {
   // ── STRATEGY C: WordPress MyCal ──────────────────────────────────────────
 
   daly: {
-    name:        'Daly Rink',
     strategy:    'wordpress-mycal',
     calendarUrl: 'https://www.dalyrink.org/calendar/',
-    website:     'https://www.dalyrink.org',
     surface:     'Ice',
     timezone:    'America/New_York',
     price:       8.00,
@@ -146,6 +139,13 @@ const RINKS = {
 
 };
 
+// Merge metadata from rinks.json with schedule data
+const RINKS = Object.fromEntries(
+  Object.entries(RINK_SCHEDULES).map(([key, sched]) => {
+    const meta = _shMeta[key] || {};
+    return [key, { ...sched, name: meta.name || key, website: meta.website || '#' }];
+  })
+);
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
 function to24h(h, m, period) {

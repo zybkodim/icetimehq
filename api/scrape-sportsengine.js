@@ -25,52 +25,53 @@ function classifyType(name = '') {
 
 const EXCLUDE = /game|\bleague\b|learn.to.sk|lts|duck shinny|goalie.only|private|tournament|birthday|party|lesson|class|clinic|camp|practice|tryout|scrimmage/i;
 
-// ── Config ────────────────────────────────────────────────────────────────────
-const RINKS = {
+// ── Config — metadata from rinks.json, schedule data inline ──────────────────
+const fs   = require('fs');
+const path = require('path');
+const _allRinks = JSON.parse(fs.readFileSync(path.join(__dirname, 'rinks.json'), 'utf8'));
 
+// SE-specific URLs and prices (not stored in rinks.json)
+const SE_URLS = {
   haymarket: {
-    name:           'Haymarket Iceplex',
-    calendarUrl:    'https://www.haymarketiceplex.com/calendar',
-    publicSkateUrl: 'https://www.haymarketiceplex.com/page/show/8615506-public-skate-schedule',
-    website:        'https://www.haymarketiceplex.com',
-    surface:        'Ice',
-    timezone:       'America/New_York',
-    price:          10.00,
+    calendarUrl:      'https://www.haymarketiceplex.com/calendar',
+    publicSkateUrl:   'https://www.haymarketiceplex.com/page/show/8615506-public-skate-schedule',
+    price:            10.00,
     daysmartFallback: 'haymarket',
   },
-
   princeWilliam: {
-    name:           'Prince William Ice Center',
     calendarUrl:    'https://www.innovativesportsva.com/page/show/357110-schedule',
     publicSkateUrl: 'https://www.innovativesportsva.com/page/show/357110-schedule',
-    website:        'https://www.innovativesportsva.com',
-    surface:        'Ice',
-    timezone:       'America/New_York',
     price:          null,
   },
-
   rockville: {
-    name:           'Rockville Ice Arena',
     calendarUrl:    'https://www.rockvilleicearena.com/page/show/2944804-public-and-stick-time-ice-schedules',
     publicSkateUrl: 'https://www.rockvilleicearena.com/page/show/2944804-public-and-stick-time-ice-schedules',
-    website:        'https://www.rockvilleicearena.com',
-    surface:        'Ice',
-    timezone:       'America/New_York',
     price:          null,
     stickPrice:     18.00,
   },
-
   breakaway: {
-    name:           'Breakaway Ice Center',
     calendarUrl:    'https://www.breakawayicecenter.com/schedule/',
     publicSkateUrl: 'https://www.breakawayicecenter.com/schedule/',
-    website:        'https://www.breakawayicecenter.com',
-    surface:        'Ice',
-    timezone:       'America/New_York',
     price:          null,
   },
-
 };
+
+// Build RINKS from rinks.json — only SE1 rinks
+const RINKS = Object.fromEntries(
+  Object.values(_allRinks)
+    .filter(r => r.scraper_file === 'api/scrape-sportsengine.js' && r.scraper_key)
+    .map(r => [r.scraper_key, {
+      name:             r.name,
+      calendarUrl:      SE_URLS[r.scraper_key]?.calendarUrl    || r.website,
+      publicSkateUrl:   SE_URLS[r.scraper_key]?.publicSkateUrl || r.website,
+      website:          r.website,
+      surface:          'Ice',
+      timezone:         'America/New_York',
+      price:            SE_URLS[r.scraper_key]?.price          || null,
+      stickPrice:       SE_URLS[r.scraper_key]?.stickPrice     || null,
+      daysmartFallback: SE_URLS[r.scraper_key]?.daysmartFallback || null,
+    }])
+);
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 function to24h(h, m, period) {
