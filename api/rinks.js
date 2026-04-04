@@ -7,7 +7,7 @@ const path = require('path');
 
 module.exports = function handler(req, res) {
   try {
-    const data = fs.readFileSync(path.join(__dirname, 'rinks.json'), 'utf8');
+    const data = fs.readFileSync(path.join(__dirname, '../data/rinks.json'), 'utf8');
     res.setHeader('Content-Type', 'application/json');
     res.setHeader('Cache-Control', 'public, max-age=300');
     res.setHeader('Access-Control-Allow-Origin', '*');
