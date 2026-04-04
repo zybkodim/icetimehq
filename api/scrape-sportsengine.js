@@ -28,7 +28,7 @@ const EXCLUDE = /game|\bleague\b|learn.to.sk|lts|duck shinny|goalie.only|private
 // ── Config — metadata from rinks.json, schedule data inline ──────────────────
 const fs   = require('fs');
 const path = require('path');
-const _allRinks = JSON.parse(fs.readFileSync(path.join(__dirname, 'rinks.json'), 'utf8'));
+const _allRinks = JSON.parse(fs.readFileSync(path.join(__dirname, '../data/rinks.json'), 'utf8'));
 
 // SE-specific URLs and prices (not stored in rinks.json)
 const SE_URLS = {
