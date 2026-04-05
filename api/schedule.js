@@ -19,10 +19,21 @@ function cacheSet(key, data) { cache.set(key, { data, ts: Date.now() }); }
 // ─── CLEAN SESSION NAME ───────────────────────────────────────────────────────
 // 1. Strip trailing date ranges:  "PI – Stick Time (3/23-3/29)" → "Stick Time"
 // 2. Strip facility prefix codes: "PI – Stick Time" → "Stick Time"
+// 3. Strip "GPI SKATER - Mon 5:30am" style prefixes → last meaningful part
 function cleanName(raw) {
   let n = (raw || '').trim();
+  // Strip trailing date ranges like (3/23-3/29) or (Mar 29-31)
   n = n.replace(/\s*\(\d{1,2}\/\d{1,2}[-–]\d{1,2}\/\d{1,2}\)\s*$/, '').trim();
+  n = n.replace(/\s*\(Mar\s+\d+-\d+\)\s*$/, '').trim();
+  // Strip facility prefix codes with dash/en-dash: "PI – ", "KHS – ", "GPI – "
   n = n.replace(/^[A-Z]{2,5}\s*[-–]\s*/, '').trim();
+  // Strip "GPI SKATER - Mon 5:30am" → take everything after last " - "
+  // These are program schedule labels, not session names
+  if (/^[A-Z\s]+ - (Mon|Tue|Wed|Thu|Fri|Sat|Sun)\s/i.test(n)) {
+    // e.g. "GPI SKATER - Mon 5:30am Open" → drop the facility+day prefix
+    n = n.replace(/^[A-Z\s]+- (?:Mon|Tue|Wed|Thu|Fri|Sat|Sun)\s[\d:apm]+\s*/i, '').trim();
+    if (!n) n = 'Open Session'; // fallback if nothing left
+  }
   return n;
 }
 
@@ -95,7 +106,7 @@ function buildUrl(company, date, endDate, facilityId, includeStr) {
     `company=${encodeURIComponent(company)}`,
   ];
   if (includeStr) parts.push(`include=${encodeURIComponent(includeStr)}`);
-  if (facilityId) parts.push(`filter[facility_id]=${encodeURIComponent(facilityId)}`);
+  if (facilityId) parts.push(`filter[facility_ids][]=${facilityId}`);
   return `${DAYSMART_BASE}?${parts.join('&')}`;
 }
 
@@ -132,6 +143,20 @@ function normalize(json, company, date, facilityId, facilityFilter) {
       }
     }
     if (!rawName) rawName = attrs.desc || attrs.name || attrs.title || '';
+
+    // If summary name looks like it belongs to a different facility
+    // (e.g. "GPI SKATER - Mon 5:30am" on a KHS event), fall back to
+    // the event's own desc/name field which is more reliable
+    if (facilityFilter && rawName) {
+      const upperRaw = rawName.toUpperCase();
+      const otherPrefixes = ['GPI ', 'AI-', 'AI ', 'LI-', 'LI ', 'PI -', 'PI–', 'COREY', 'CASEY'];
+      const belongsToOther = otherPrefixes.some(p => upperRaw.startsWith(p));
+      const belongsToUs = upperRaw.includes(facilityFilter.toUpperCase());
+      if (belongsToOther && !belongsToUs) {
+        // Summary is from another facility — use event attributes directly
+        rawName = attrs.desc || attrs.name || attrs.title || rawName;
+      }
+    }
 
     // ── Clean the name ────────────────────────────────────────────────────
     const name = cleanName(rawName);
